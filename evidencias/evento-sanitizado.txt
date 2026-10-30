@@ -1,0 +1,3 @@
+# Ejemplo basado en un evento real; contenido intencionalmente anonimizado.
+# 'PID' y '<usuario>' no corresponden al mensaje exacto.
+2026-10-30T11:31:44+01:00 source=192.168.1.20 <14>Oct 30 10:31:44 httpd[PID]: Password auth succeeded for '<usuario>' from 192.168.1.10

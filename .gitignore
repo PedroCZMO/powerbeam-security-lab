@@ -1,0 +1,40 @@
+# Registros reales y rotaciones
+*.log
+*.log.*
+*.gz
+*.pcap
+*.pcapng
+*.cap
+
+# Copias de seguridad / exportaciones de dispositivos
+*.backup
+*.bak
+*.cfg
+*.bin
+*.tar
+*.tgz
+*.zip
+backups/
+backup/
+exports/
+
+# Credenciales y secretos
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.ovpn
+id_rsa
+id_ed25519
+credentials*
+secrets*
+
+# Entorno local
+.DS_Store
+Thumbs.db
+__pycache__/
+.vscode/
+.idea/

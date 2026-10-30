@@ -1,0 +1,26 @@
+# REFERENCIA RECONSTRUIDA (NO VOLCADO DEL ARCHIVO REAL)
+# PowerBeam Security Lab - rsyslog UDP receptor
+# Adaptar direcciones, permisos, rulesets y evitar imudp duplicado.
+# Validar con: sudo rsyslogd -N1
+
+module(load="imudp")
+
+template(name="PowerBeamFormat" type="string"
+         string="%timegenerated:::date-rfc3339% source=%fromhost-ip% %rawmsg%\n")
+
+ruleset(name="PowerBeamRemote") {
+    if ($fromhost-ip == "192.168.1.20") then {
+        action(type="omfile"
+               file="/var/log/powerbeam/powerbeam.log"
+               template="PowerBeamFormat"
+               fileOwner="syslog"
+               fileGroup="syslog"
+               fileCreateMode="0640")
+        stop
+    }
+}
+
+input(type="imudp"
+      address="192.168.1.10"
+      port="5514"
+      ruleset="PowerBeamRemote")

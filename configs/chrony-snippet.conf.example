@@ -1,0 +1,12 @@
+# EJEMPLO ORIENTATIVO - NO es la configuración verificada del Día 2.
+# Agregar a la configuración real de Chrony SOLO después de revisar
+# la interfaz de red, el firewall y la política de sincronización.
+# No sustituir /etc/chrony/chrony.conf completo por este fragmento.
+
+# Permitir solicitudes NTP únicamente desde la IP del PowerBeam:
+allow 192.168.1.20
+
+# Limitar la escucha del servicio a la IP local de laboratorio:
+bindaddress 192.168.1.10
+
+# Verificar: chronyc tracking; sudo ss -lunp | grep ':123'
