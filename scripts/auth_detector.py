@@ -40,14 +40,20 @@ def parse_event(line):
     return received_at, match.group("ip"), kind
 
 
-def main():
-    events = [event for line in sys.stdin if (event := parse_event(line))]
-    # La fecha que empleamos es la de recepción en Ubuntu, no la del PowerBeam.
+def detect(lines):
+    """Devuelve (alertas, conteos) para reutilizar SOC-002 desde otros programas.
+
+    Cada alerta es (fecha_recepcion, ip_cliente, fallos_previos).
+    Mantiene el comportamiento del detector original: reinicia la secuencia
+    de fallos de esa IP después de cada autenticación correcta.
+    """
+    events = [event for line in lines if (event := parse_event(line))]
+    # Evitamos confiar en la hora interna del PowerBeam: usamos recepción en Ubuntu.
     events.sort(key=lambda item: item[0])
 
     counts = defaultdict(int)
     recent_failures = defaultdict(deque)
-    alerts = 0
+    alerts = []
 
     for received_at, ip, kind in events:
         counts[kind] += 1
@@ -59,20 +65,26 @@ def main():
             queue.append(received_at)
         elif kind == "autenticacion_correcta":
             if len(queue) >= FAILURE_THRESHOLD:
-                alerts += 1
-                print(
-                    f"[SOC-002] POSIBLE ACCESO TRAS FALLOS | "
-                    f"{received_at.isoformat()} | origen={ip} | "
-                    f"fallos_previos={len(queue)} | ventana=5m"
-                )
-            # Consideramos una nueva secuencia después de cada acceso correcto.
+                alerts.append((received_at, ip, len(queue)))
             queue.clear()
+
+    return alerts, counts
+
+
+def main():
+    alerts, counts = detect(sys.stdin)
+    for received_at, ip, failed in alerts:
+        print(
+            f"[SOC-002] POSIBLE ACCESO TRAS FALLOS | "
+            f"{received_at.isoformat()} | origen={ip} | "
+            f"fallos_previos={failed} | ventana=5m"
+        )
 
     print("\n=== RESUMEN DE AUTENTICACIONES ===")
     print(f"Correctas: {counts['autenticacion_correcta']}")
     print(f"Contraseñas incorrectas: {counts['contrasena_incorrecta']}")
     print(f"Usuarios inexistentes: {counts['usuario_inexistente']}")
-    print(f"Alertas SOC-002: {alerts}")
+    print(f"Alertas SOC-002: {len(alerts)}")
     if alerts:
         print("Nota: una alerta requiere revisión; no demuestra un ataque.")
 

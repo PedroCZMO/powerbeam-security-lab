@@ -38,3 +38,6 @@ Thumbs.db
 __pycache__/
 .vscode/
 .idea/
+
+# Alertas locales de seguridad
+alerts/
