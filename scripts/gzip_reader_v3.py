@@ -34,11 +34,27 @@ def snapshot(log_dir, state):
     entries.sort(key=rank, reverse=True)
     raw_entries = [p for p in entries if RAW_RE.fullmatch(p.name)]
     live_raw_ids = set()
+    reused_raw_ids = set()
     for path in raw_entries:
         if path.is_symlink() or not path.is_file():
             raise ValueError(f"Archivo no regular/symlink: {path}")
         st = path.stat(follow_symlinks=False)
-        live_raw_ids.add(f"{st.st_dev}:{st.st_ino}")
+        ident = f"{st.st_dev}:{st.st_ino}"
+        live_raw_ids.add(ident)
+        # El SO puede reciclar un inodo después de comprimir/eliminar un
+        # archivo antiguo. dev:ino deja de identificar unívocamente al
+        # contenido ya confirmado: comprobar su prefijo antes de confiar.
+        meta = state["raw_prefixes"].get(ident)
+        if meta is not None:
+            old_offset = meta["offset"]
+            fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+            try:
+                with os.fdopen(fd, "rb", closefd=False) as f:
+                    if (os.fstat(fd).st_size < old_offset or
+                            hashlib.sha256(f.read(old_offset)).hexdigest() != meta["sha256"]):
+                        reused_raw_ids.add(ident)
+            finally:
+                os.close(fd)
 
     cursors = dict(state["cursors"])
     prefixes = {key: dict(value) for key, value in state["raw_prefixes"].items()}
@@ -68,7 +84,8 @@ def snapshot(log_dir, state):
                 continue
             # Seleccionar entre cursores raw desaparecidos cuyo prefijo coincida.
             candidates = [(raw_id, meta["offset"]) for raw_id, meta in prefixes.items()
-                          if raw_id not in live_raw_ids and raw_id not in reconciled_raw_ids
+                          if (raw_id not in live_raw_ids or raw_id in reused_raw_ids)
+                          and raw_id not in reconciled_raw_ids
                           and meta["offset"] > 0 and meta["offset"] <= len(data)
                           and hashlib.sha256(data[:meta["offset"]]).hexdigest() == meta["sha256"]]
             if len(candidates) > 1:
@@ -88,12 +105,21 @@ def snapshot(log_dir, state):
                 with os.fdopen(fd, "rb", closefd=False) as fh:
                     stat = os.fstat(fd)
                     ident = f"{stat.st_dev}:{stat.st_ino}"
-                    previous = cursors.get(ident, 0)
+                    # Un inodo reciclado solo se acepta si su histórico
+                    # previo pudo reconciliarse verificando el gzip.
+                    if ident in reused_raw_ids:
+                        if ident not in reconciled_raw_ids:
+                            raise ValueError(
+                                f"RES-ROTACION: inodo reutilizado sin histórico verificable: {path}"
+                            )
+                        previous = 0
+                    else:
+                        previous = cursors.get(ident, 0)
                     if previous > stat.st_size:
                         raise ValueError(f"Truncado/copytruncate no soportado: {path}")
                     # Verificar integridad del contenido ya confirmado. Lectura <= maxsize habitual.
                     prefix = fh.read(previous)
-                    old_fingerprint = prefixes.get(ident)
+                    old_fingerprint = None if ident in reused_raw_ids else prefixes.get(ident)
                     if old_fingerprint and hashlib.sha256(prefix).hexdigest() != old_fingerprint["sha256"]:
                         raise ValueError(f"El contenido ya leído ha cambiado: {path}")
                     chunk = fh.read()
@@ -119,6 +145,7 @@ def snapshot(log_dir, state):
     # Tras reconciliar un raw con un archivo comprimido ya no necesitamos
     # conservar su cursor: el gzip queda registrado por identidad y hash.
     for raw_id in reconciled_raw_ids:
-        cursors.pop(raw_id, None)
-        prefixes.pop(raw_id, None)
+        if raw_id not in reused_raw_ids:
+            cursors.pop(raw_id, None)
+            prefixes.pop(raw_id, None)
     return lines, cursors, prefixes, archived

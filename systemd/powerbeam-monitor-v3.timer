@@ -1,0 +1,11 @@
+[Unit]
+Description=PowerBeam Security Monitor V3 - Parallel Validation Timer
+
+[Timer]
+OnCalendar=*:2/5
+AccuracySec=30s
+Persistent=true
+Unit=powerbeam-monitor-v3.service
+
+[Install]
+WantedBy=timers.target
