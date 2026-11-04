@@ -1,0 +1,22 @@
+[Unit]
+Description=PowerBeam Security Lab - Health Check
+After=rsyslog.service
+
+[Service]
+Type=oneshot
+User=powerbeam-monitor
+Group=powerbeam-monitor
+
+ExecStart=/usr/bin/python3 -B /opt/powerbeam-monitor-v3/scripts/health_check.py --inspect-log-activity --fresh-minutes 30 --check-antenna-icmp
+
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+TimeoutStartSec=90
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=powerbeam-healthcheck

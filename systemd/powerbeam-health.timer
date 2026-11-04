@@ -1,0 +1,11 @@
+[Unit]
+Description=PowerBeam Security Lab - Health Check Timer
+
+[Timer]
+OnCalendar=*:4/10
+AccuracySec=30s
+Persistent=true
+Unit=powerbeam-health.service
+
+[Install]
+WantedBy=timers.target
