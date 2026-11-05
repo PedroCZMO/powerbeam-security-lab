@@ -1,0 +1,25 @@
+[Unit]
+Description=PowerBeam Security Lab - Alert Queue Scanner
+After=local-fs.target
+
+[Service]
+Type=oneshot
+
+User=powerbeam-monitor
+Group=powerbeam-monitor
+
+ExecStart=/usr/bin/python3 -B /opt/powerbeam-monitor-v3/scripts/alert_queue.py scan --source /var/lib/powerbeam-monitor/alerts.jsonl --state /var/lib/powerbeam-monitor/alert-queue/state.json
+
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+ReadWritePaths=/var/lib/powerbeam-monitor/alert-queue
+
+TimeoutStartSec=30
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=powerbeam-alert-queue

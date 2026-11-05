@@ -1,0 +1,11 @@
+[Unit]
+Description=PowerBeam Security Lab - Alert Queue Timer
+
+[Timer]
+OnCalendar=*-*-* *:*:00
+AccuracySec=10s
+Persistent=true
+Unit=powerbeam-alert-queue.service
+
+[Install]
+WantedBy=timers.target
