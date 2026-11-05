@@ -1,5 +1,7 @@
 # PowerBeam Security Lab
 
+[![Python Tests](https://github.com/PedroCZMO/powerbeam-security-lab/actions/workflows/python-tests.yml/badge.svg?branch=main)](https://github.com/PedroCZMO/powerbeam-security-lab/actions/workflows/python-tests.yml)
+
 **Laboratorio personal de Blue Team / SOC L1** · Ubiquiti PowerBeam PBE-M5-400 · Ubuntu · Python · Syslog · systemd
 
 > **Estado verificado: 4 de noviembre de 2026.** Proyecto de aprendizaje construido sobre un dispositivo propio y una red local controlada. Incluye detección de eventos de autenticación, pruebas automatizadas, supervisión de infraestructura e investigación documentada de un simulacro. **No es un SOC de producción ni una auditoría de seguridad formal.**
