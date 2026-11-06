@@ -2,7 +2,7 @@
 
 **Proyecto:** PowerBeam Security Lab  
 **Fecha del ejercicio:** 2026-11-06 (Europe/Madrid)  
-**Estado:** Topología y atribución de IP verificadas; primera telemetría SSH recibida; autenticación **no alcanzada**.  
+**Estado:** Topología y atribución de IP verificadas; telemetría SSH recibida; negociación SSH y fase de oferta de métodos de autenticación **alcanzadas**. Ninguna autenticación completada ni contraseña probada.
 **Naturaleza:** Laboratorio propio y pruebas autorizadas, sin explotación ni fuerza bruta.
 
 ## 1. Objetivo y alcance
@@ -10,7 +10,7 @@
 Preparar una VM Kali Linux como estación Red Team independiente del Ubuntu que ejecuta el SOC; comprobar que la antena Ubiquiti PowerBeam recibe la IP real de Kali como origen; y verificar si la antena remite al SOC eventos de una conexión SSH.
 
 **Activo bajo evaluación:** Ubiquiti PowerBeam (`192.168.1.20`) — plano de administración TCP/22.  
-**Alcance de estas comprobaciones:** red y negociación SSH. **No** se han ejecutado intentos de contraseña, explotación ni pruebas de denegación de servicio.
+**Alcance de estas comprobaciones:** red, negociación SSH y comprobación de métodos de autenticación disponibles. **No** se han ejecutado intentos de contraseña, explotación ni pruebas de denegación de servicio.
 
 ## 2. Topología verificada
 
@@ -158,19 +158,144 @@ Connection reset by 192.168.1.20 port 22
 
 Nota horaria: las líneas están fechadas por rsyslog en `+01:00`, mientras que el mensaje embebido del dispositivo presenta otra hora. Para correlación, conservar ambas fuentes y validar sincronización horaria más adelante.
 
+### Prueba C — Diagnóstico con OpenSSH 10.6 y registro de la negociación (13:26 h)
+
+**Versión del cliente:** `OpenSSH_10.6p1 Debian-1`, OpenSSL `3.6.5`.
+
+La consulta `ssh -G -o HostKeyAlgorithms=+ssh-rsa ubnt@192.168.1.20` confirmó que la propuesta efectiva del cliente **sí contenía** `ssh-rsa`, además de métodos modernos de intercambio de claves.
+
+Se ejecutó desde Kali una conexión de diagnóstico con `-vvv`, `HostKeyAlgorithms=+ssh-rsa`, `BatchMode=yes`, `PreferredAuthentications=none`, autenticación por contraseña y clave desactivada, y `ConnectTimeout=5`. No se introdujeron credenciales.
+
+**Tramos determinantes de la salida del cliente:**
+
+```text
+Remote protocol version 2.0, remote software version dropbear
+SSH2_MSG_KEXINIT sent
+SSH2_MSG_KEXINIT received
+peer server KEXINIT proposal
+KEX algorithms: curve25519-sha256,curve25519-sha256@libssh.org,diffie-hellman-group14-sha256,diffie-hellman-group14-sha1,diffie-hellman-group1-sha1
+host key algorithms: ssh-rsa,ssh-dss
+kex: algorithm: curve25519-sha256
+kex: host key algorithm: ssh-rsa
+kex: server->client cipher: aes128-ctr MAC: hmac-sha2-256 compression: none
+kex: client->server cipher: aes128-ctr MAC: hmac-sha2-256 compression: none
+expecting SSH2_MSG_KEX_ECDH_REPLY
+Connection closed by 192.168.1.20 port 22
+```
+
+**Telemetría correlacionada en el SOC:**
+
+```text
+2026-11-06T13:26:16.527995+01:00 source=192.168.1.20 <86>Nov  6 12:26:16 dropbear[864]: Child connection from 192.168.1.30:52800
+2026-11-06T13:26:16.532472+01:00 source=192.168.1.20 <86>Nov  6 12:26:16 dropbear[864]: Exit before auth: No matching algo hostkey
+```
+
+**Interpretación precisa:** el cliente y el servidor anunciaron algoritmos coincidentes y el cliente **seleccionó** `curve25519-sha256` + `ssh-rsa`, pero la negociación **no terminó**: se cerró antes de recibir `SSH2_MSG_KEX_ECDH_REPLY`. El mensaje de Dropbear apunta a un fallo interno de selección/uso de algoritmo de clave de host **desde la perspectiva del servidor**. Todavía no está demostrada la causa: no puede afirmarse que falte la clave privada RSA, que sea un fallo de firmware o que el cliente sea el responsable.
+
+**Conclusión de detección:** tercer evento previo a autenticación observado desde la IP Red Team `192.168.1.30`. **No hubo acceso ni fallo de contraseña**, así que no debe contabilizarse como SOC-001/SOC-002.
+
+**Contraste realizado:** la prueba D siguiente restringió `HostKeyAlgorithms` a `ssh-rsa` (sin `+`) y sí completó el intercambio de claves. No fue necesario habilitar `ssh-dss` ni modificar la configuración de Dropbear.
+
+### Prueba D — Algoritmo de host explícito `ssh-rsa` (13:31 h)
+
+La prueba restringió **solo esta conexión** al algoritmo de host `ssh-rsa`. Se desactivó la autenticación interactiva mediante `BatchMode=yes` y se evitó introducir contraseñas.
+
+```bash
+ssh -vv \
+  -o HostKeyAlgorithms=ssh-rsa \
+  -o BatchMode=yes \
+  -o PreferredAuthentications=none \
+  -o PubkeyAuthentication=no \
+  -o PasswordAuthentication=no \
+  -o KbdInteractiveAuthentication=no \
+  -o ConnectTimeout=5 \
+  ubnt@192.168.1.20
+```
+
+**Evidencia decisiva de Kali:**
+
+```text
+kex: algorithm: curve25519-sha256
+kex: host key algorithm: ssh-rsa
+kex: server->client cipher: aes128-ctr MAC: hmac-sha2-256 compression: none
+kex: client->server cipher: aes128-ctr MAC: hmac-sha2-256 compression: none
+SSH2_MSG_KEX_ECDH_REPLY received
+Server host key: ssh-rsa SHA256:mRuQdbn6n+nSQPb+Es5vFxJnTcci9f+nNq0Ro2ZWuDE
+Host key verification failed.
+```
+
+**Eventos recibidos por el SOC:**
+
+```text
+2026-11-06T13:31:45.962410+01:00 source=192.168.1.20 <86>Nov  6 12:31:45 dropbear[865]: Child connection from 192.168.1.30:48998
+2026-11-06T13:31:46.747868+01:00 source=192.168.1.20 <86>Nov  6 12:31:46 dropbear[865]: Exit before auth: Exited normally
+```
+
+**Interpretación:** esta vez Kali **recibió** la respuesta al intercambio de claves y la clave pública RSA del servidor. El cliente se detuvo **en la verificación de la identidad de la clave de host**, porque no había un registro de confianza previo en `known_hosts` y se utilizó `BatchMode=yes` (sin interacción). No hubo intento de contraseña ni autenticación. La diferencia entre `HostKeyAlgorithms=+ssh-rsa` (falló en este escenario) y `HostKeyAlgorithms=ssh-rsa` (avanzó hasta recibir la clave) es un resultado empírico, **no prueba por sí sola la causa interna en Dropbear**. No desactivar `StrictHostKeyChecking` de forma indiscriminada; verificar la huella digital mediante una fuente confiable antes de establecer confianza.
+
+**Continuación realizada:** la prueba E aceptó interactivamente la clave de host mediante confianza en el primer uso (TOFU), sin verificación independiente; alcanzó la oferta de métodos de autenticación del servidor. La contraseña no se intentó.
+
+### Prueba E — Primera confianza de clave de host y llegada a la fase de autenticación (13:38 h)
+
+Kali repitió la conexión restringiendo el algoritmo de clave de host a `ssh-rsa` y habilitando **solo la confirmación interactiva de identidad del servidor**. Las autenticaciones por contraseña, clave pública y teclado interactivo permanecieron desactivadas.
+
+```bash
+ssh -v \
+  -o HostKeyAlgorithms=ssh-rsa \
+  -o StrictHostKeyChecking=ask \
+  -o BatchMode=no \
+  -o PreferredAuthentications=none \
+  -o PubkeyAuthentication=no \
+  -o PasswordAuthentication=no \
+  -o KbdInteractiveAuthentication=no \
+  -o ConnectTimeout=5 \
+  ubnt@192.168.1.20
+```
+
+**Evidencia clave del cliente Kali:**
+
+```text
+kex: algorithm: curve25519-sha256
+kex: host key algorithm: ssh-rsa
+SSH2_MSG_KEX_ECDH_REPLY received
+Server host key: ssh-rsa SHA256:mRuQdbn6n+nSQPb+Es5vFxJnTcci9f+nNq0Ro2ZWuDE
+Are you sure you want to continue connecting (yes/no/[fingerprint])? yes
+Warning: Permanently added '192.168.1.20' (RSA) to the list of known hosts.
+SSH2_MSG_NEWKEYS sent
+SSH2_MSG_NEWKEYS received
+SSH2_MSG_SERVICE_ACCEPT received
+Authentications that can continue: publickey,password
+No more authentication methods to try.
+ubnt@192.168.1.20: Permission denied (publickey,password).
+```
+
+**Telemetría recibida en Ubuntu SOC:**
+
+```text
+2026-11-06T13:38:51.996610+01:00 source=192.168.1.20 <86>Nov  6 12:38:51 dropbear[867]: Child connection from 192.168.1.30:35112
+2026-11-06T13:38:55.575442+01:00 source=192.168.1.20 <86>Nov  6 12:38:55 dropbear[867]: Exit before auth (user 'ubnt', 0 fails): Exited normally
+```
+
+**Interpretación:** en esta prueba se completó la negociación SSH y el cliente recibió los métodos de autenticación disponibles (`publickey,password`). La línea final `Permission denied` **no indica contraseña incorrecta**: ninguna modalidad de autenticación estaba habilitada en el cliente, y Dropbear registró inequívocamente `0 fails`. No hubo sesión de usuario ni acceso autenticado. **SOC-001 y SOC-002 no han sido validadas con esta prueba**.
+
+La huella RSA se aceptó mediante **Trust On First Use (TOFU)** desde la red de laboratorio; no hay constancia de verificación independiente contra una fuente de confianza. Para un entorno empresarial, verificarla fuera de banda antes de establecer confianza. La advertencia de OpenSSH sobre ausencia de intercambio poscuántico también apareció; es una observación de compatibilidad con un servidor antiguo, **no evidencia de una intrusión**.
+
+**Hallazgo útil para el SOC:** los eventos `Exit before auth` incluyen distintos motivos (algoritmo no compatible y salida normal), incluso en una sesión que alcanzó la oferta de métodos de autenticación; no deben clasificarse automáticamente como intentos fallidos de contraseña.
+
 ## 6. Hallazgos y límites
 
 | ID | Observación / hallazgo | Evidencia | Estado |
 | --- | --- | --- | --- |
 | RTBT-001 | Kali y SOC tienen IP de origen diferenciada hacia la antena | Ruta de Kali y `tcpdump` | **Verificado** |
 | RTBT-002 | El puerto SSH de la antena es alcanzable desde Kali | `nc` al 22/TCP | **Verificado** |
-| RTBT-003 | La antena envía por syslog conexiones SSH y fallos previos a autenticación | Dos pares de eventos Dropbear | **Verificado** |
-| RTBT-004 | La negociación de claves de host con el cliente moderno no completó; oferta `ssh-rsa,ssh-dss` | Salida de Kali y Dropbear | **Observado, pendiente de investigación** |
-| RTBT-005 | No se conoce todavía la visibilidad de errores de contraseña por SSH en este escenario | No se alcanzó autenticación | **No evaluado** |
+| RTBT-003 | La antena envía por syslog conexiones SSH y cierres previos a autenticación | Cinco pares de eventos Dropbear | **Verificado** |
+| RTBT-004 | Oferta heredada de algoritmos de host `ssh-rsa,ssh-dss`; el intercambio de claves avanzó al forzar `ssh-rsa` | Pruebas A–D y syslog Dropbear | **Compatibilidad observada; endurecimiento pendiente** |
+| RTBT-005 | No se conoce todavía la visibilidad de errores de contraseña por SSH en este escenario | No se realizó autenticación con contraseña; sí se llegó a la oferta de métodos | **No evaluado** |
+| RTBT-006 | Kali recibió la clave RSA y la aceptó por TOFU; no se ha verificado de forma independiente | `SSH2_MSG_KEX_ECDH_REPLY received`, huella SHA256 y prueba E | **Confianza TOFU; verificación externa pendiente** |
 
 La oferta de algoritmos heredados es una cuestión de compatibilidad y una posible debilidad de configuración que conviene investigar, **no una explotación demostrada**. No activar opciones criptográficas inseguras de forma global ni alterar el firmware o la configuración de producción sin una evaluación y copia de seguridad previas.
 
-**Límites de detección:** disponer de syslog no implica observar todo el tráfico o todos los intentos de ataque. Las pruebas realizadas no demuestran detección de escaneos, autenticaciones fallidas ni explotación. No se ha verificado una alerta automática específica para los eventos `Exit before auth`.
+**Límites de detección:** disponer de syslog no implica observar todo el tráfico o todos los intentos de ataque. Las pruebas realizadas no demuestran detección de escaneos, fallos de contraseña ni explotación. No se ha verificado una alerta automática específica para los eventos `Exit before auth`.
 
 ## 7. Seguridad, evidencia y cierre de la sesión
 
@@ -182,12 +307,11 @@ La oferta de algoritmos heredados es una cuestión de compatibilidad y una posib
 
 ## 8. Punto de reanudación / siguientes acciones
 
-1. Verificar fecha/hora, zona horaria y versión de firmware de la antena antes de atribuir causas a la negociación SSH.
-2. Examinar de forma no intrusiva los algoritmos SSH anunciados y los ajustes de administración disponibles; no activar algoritmos obsoletos globalmente.
-3. Determinar por qué `HostKeyAlgorithms=+ssh-rsa` siguió terminando con `No matching algo hostkey` (cliente, Dropbear o política del dispositivo).
-4. Diseñar **una** prueba de autenticación autorizada que llegue a solicitar contraseña, limitando intentos y protegiendo el acceso administrativo.
-5. Contrastar eventos observados con `auth_detector` y reglas SOC-001/SOC-002; no reinterpretar errores de negociación como fallos de contraseña.
-6. Evaluar más adelante telemetría adicional para eventos que no queden reflejados en syslog (por ejemplo, escaneos), con un punto real de observación del tráfico.
-7. Planificar hardening y una repetición de las pruebas, sin tocar todavía la configuración de la antena.
+1. Verificar independientemente la huella SSH RSA de la antena; Kali la aceptó por TOFU, no por una comprobación fuera de banda.
+2. Verificar fecha/hora, zona horaria y versión exacta de firmware de la antena antes de proponer cambios.
+3. Diseñar **una** prueba autorizada de contraseña incorrecta, con límites claros y sin automatizar intentos; confirmar que se genera un evento `0 fails` vs. `1 fail` y que el SOC lo interpreta correctamente.
+4. Revisar las reglas SOC-001/SOC-002 existentes: no reinterpretar errores de negociación como fallos de contraseña y comprobar la cobertura específica de mensajes SSH de Dropbear.
+5. Evaluar más adelante telemetría adicional para eventos que no queden reflejados en syslog (por ejemplo, escaneos), con un punto real de observación del tráfico.
+6. Planificar hardening y una repetición de las pruebas, sin tocar todavía la configuración de la antena.
 
-**Estado al cerrar:** topología Red Team/Blue Team funcional, origen de Kali identificado, dos eventos previos a autenticación recibidos en el SOC, autenticación SSH todavía pendiente de evaluar.
+**Estado al cerrar:** topología Red Team/Blue Team funcional, IP de Kali correctamente atribuida, **cinco conexiones SSH registradas en syslog**, negociación SSH completada en pruebas D y E, y fase de autenticación alcanzada en la prueba E (**cero fallos reales de credenciales**). La verificación independiente de la clave de host y la prueba controlada de contraseña quedan pendientes.
