@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""PowerBeam resilience overview: local systemd and OAuth checks, never send mail.
+"""PowerBeam resilience overview: local systemd, OAuth and SOC backlog health.
 
-Run as the Ubuntu user who owns the private OAuth token. Does not read alert
-records/checkpoints or modify token files. Optional online probe refreshes
-credentials in memory against Google; use manually and sparingly.
+Run as the Ubuntu user who owns the private OAuth token. To integrate the
+private alert queue, pipe the read-only *aggregate* output of alert_backlog_health
+(run separately as powerbeam-monitor) into --backlog-stdin. This process never
+reads private alert state, reads raw events, writes credentials, or sends mail.
+Optional online OAuth check uses refresh credentials in memory only.
 """
 import argparse
 from datetime import datetime, timezone
@@ -78,8 +80,92 @@ def aggregate(statuses):
     return max(statuses, key=lambda x: ORDER.get(x, 1)) if statuses else "UNKNOWN"
 
 
+
+# Public aggregate-only contract produced by alert_backlog_health.py.
+# Never forward raw alert lists, IP addresses, source paths or token material.
+MAX_BACKLOG_REPORT_BYTES = 65536
+BACKLOG_SEVERITIES = ("informational", "low", "medium", "high", "critical")
+BACKLOG_REASON_STATUS = {
+    "NO_PENDING_ALERTS": "HEALTHY",
+    "PENDING_WITHIN_POLICY": "HEALTHY",
+    "HIGH_PENDING_TOO_OLD": "WARNING",
+    "PENDING_EVENT_TOO_OLD": "WARNING",
+    "FUTURE_EVENT_TIMESTAMP": "WARNING",
+    "CRITICAL_SEVERITY_PENDING": "CRITICAL",
+    "MAX_EVENT_AGE_EXCEEDED": "CRITICAL",
+}
+
+
+def _count(value):
+    return type(value) is int and 0 <= value <= 100_000_000
+
+
+def clean_backlog(raw):
+    """Validate the independent backlog report and keep only aggregate values.
+
+    No raw source content, alert IDs, IP addresses, or unexpected data survives.
+    A bad report is UNKNOWN rather than incorrectly HEALTHY.
+    """
+    if not isinstance(raw, dict):
+        return None
+    if (raw.get("component") != "powerbeam_alert_backlog"
+            or raw.get("inspection") != "LOCAL_READ_ONLY"
+            or raw.get("age_basis") != "EVENT_TIMESTAMP_NOT_QUEUE_ENTRY"
+            or raw.get("state_modified") is not False
+            or type(raw.get("alerts_acknowledged")) is not int
+            or raw["alerts_acknowledged"] != 0
+            or type(raw.get("emails_sent")) is not int
+            or raw["emails_sent"] != 0):
+        return None
+    status = raw.get("operational_status")
+    reason = raw.get("status_reason")
+    if status not in ("HEALTHY", "WARNING", "CRITICAL") or BACKLOG_REASON_STATUS.get(reason) != status:
+        return None
+    pending = raw.get("pending_total")
+    seen = raw.get("seen_total")
+    acknowledged = raw.get("acknowledged_total")
+    counts = raw.get("pending_by_severity")
+    if not all(map(_count, (pending, seen, acknowledged))):
+        return None
+    if not isinstance(counts, dict) or set(counts) != set(BACKLOG_SEVERITIES):
+        return None
+    if not all(_count(counts[k]) for k in BACKLOG_SEVERITIES):
+        return None
+    if sum(counts.values()) != pending or pending + acknowledged > seen:
+        return None
+    age = raw.get("oldest_event_age_minutes")
+    if pending == 0:
+        if age is not None or status != "HEALTHY" or reason != "NO_PENDING_ALERTS":
+            return None
+    elif (type(age) not in (int, float) or age != age or
+          age < 0 or age > 10_000_000 or age == float("inf")):
+        return None
+    return {
+        "operational_status": status,
+        "status_reason": reason,
+        "pending_total": pending,
+        "seen_total": seen,
+        "acknowledged_total": acknowledged,
+        "pending_by_severity": {k: counts[k] for k in BACKLOG_SEVERITIES},
+        "oldest_event_age_minutes": age,
+        "age_basis": "EVENT_TIMESTAMP_NOT_QUEUE_ENTRY",
+    }
+
+
+def read_backlog_stdin(stream):
+    """Bounded stdin parsing: do not persist raw data or log parse errors."""
+    try:
+        raw = stream.read(MAX_BACKLOG_REPORT_BYTES + 1)
+        if len(raw) > MAX_BACKLOG_REPORT_BYTES:
+            return None
+        return json.loads(raw)
+    except (ValueError, TypeError, OSError, UnicodeError):
+        return None
+
+
 def collect(token, *, online=False, reader=read_unit, oauth_reader=None,
-            remote_reader=None, now_us=None):
+            remote_reader=None, now_us=None, backlog_report=None,
+            backlog_requested=False):
     now_us = int(time.monotonic() * 1_000_000) if now_us is None else now_us
     checks = {}
     for name, (unit, kind, max_age) in UNITS.items():
@@ -113,19 +199,29 @@ def collect(token, *, online=False, reader=read_unit, oauth_reader=None,
                 remote = "NOT_CHECKED"
         except Exception:
             remote = "FAILED"
+    backlog = clean_backlog(backlog_report) if backlog_requested else None
+    backlog_status = (backlog["operational_status"] if backlog is not None
+                      else ("UNKNOWN" if backlog_requested else "NOT_CHECKED"))
+    # Keep technical availability distinct from alert review/backlog policy.
+    management = (aggregate((queue, backlog_status)) if backlog_requested
+                  else "NOT_CHECKED")
     return {
         "component": "powerbeam_resilience",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "inspection": "ONLINE_OAUTH_REFRESH_READ_ONLY" if online else "LOCAL_READ_ONLY",
         "detection_status": detection,
         "alert_queue_status": queue,
+        "backlog_status": backlog_status,
+        "alert_management_status": management,
+        "alert_backlog": backlog,
         "notification_delivery": "NOT_AUTOMATED",
         "oauth_local": local_status,
         "oauth_remote": remote,
         "checks": checks,
         "emails_sent": 0,
         "tokens_modified": False,
-        "note": "Estado de unidades y OAuth; no certifica ingestión de logs ni entrega de correo."
+        "note": "Estado de servicios, OAuth y (si se solicita) backlog V1 por hora del evento; "
+                "no certifica ingestión de logs, espera desde entrada en cola ni entrega de correo."
     }
 
 
@@ -133,11 +229,17 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="PowerBeam: estado de resiliencia sin enviar correos")
     parser.add_argument("--token", type=Path, default=oauth_health.DEFAULT_TOKEN)
     parser.add_argument("--online", choices=["YES"], help="Permite una renovacion OAuth en memoria")
+    parser.add_argument("--backlog-stdin", action="store_true",
+                        help="Lee SOLO el informe agregado de alert_backlog_health.py desde stdin")
     args = parser.parse_args(argv)
-    report = collect(args.token, online=(args.online == "YES"))
+    backlog_report = read_backlog_stdin(sys.stdin) if args.backlog_stdin else None
+    report = collect(args.token, online=(args.online == "YES"),
+                     backlog_requested=args.backlog_stdin, backlog_report=backlog_report)
     print(json.dumps(report, indent=2, ensure_ascii=False))
     # Nonzero only for broken local components; OAuth in Testing may be UNKNOWN.
     statuses = (report["detection_status"], report["alert_queue_status"])
+    if args.backlog_stdin:
+        statuses += (report["backlog_status"],)
     if "CRITICAL" in statuses:
         return 2
     if "WARNING" in statuses or "UNKNOWN" in statuses:
