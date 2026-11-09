@@ -6,7 +6,7 @@
 
 **Hands-on Blue Team / SOC L1 lab** | Python · Linux · Syslog · Detection Engineering · Incident Triage · Automated Testing
 
-> A documented personal cybersecurity lab built around an **owned Ubiquiti PowerBeam device** and an isolated/controlled local test network. This is a learning and engineering project, **not a production SOC, a commercial SIEM, or evidence of a real-world compromise**.
+> A documented personal cybersecurity lab built around an **owned Ubiquiti PowerBeam device** and a controlled local test network. This is a learning and engineering project, **not a production SOC, a commercial SIEM, or evidence of a real-world compromise**.
 
 ## 30-second overview
 
@@ -14,7 +14,7 @@ I built a small SOC-style monitoring pipeline that ingests **real authentication
 
 | Evidence a reviewer can inspect | Verified outcome |
 | --- | --- |
-| **Real SSH detection (SOC-001)** | **Five failed SSH logins** from Kali within **18.72 seconds** triggered one alert in both V1 and V3; alerts were byte-equivalent as JSON objects. [Investigation →](docs/42-pb-pt-002-soc-001-investigation.en.md) |
+| **Real SSH detection (SOC-001)** | **Five failed SSH logins** from Kali within **18.72 seconds** triggered one alert in both V1 and V3; their parsed JSON alert records were identical. [Investigation →](docs/42-pb-pt-002-soc-001-investigation.en.md) |
 | **Failed-then-successful login detection (SOC-002)** | Two failures followed by a success were correlated from real device logs in an authorised simulation. [Investigation →](docs/26-soc-002-investigation.en.md) |
 | **Automated verification** | **482 Python unit tests passed** locally and in [GitHub Actions, Python 3.12, 6 Nov 2026](https://github.com/PedroCZMO/powerbeam-security-lab/actions/runs/42268490185). |
 | **Operational automation** | V1 and V3 monitor runs (roughly every five minutes), infrastructure health checks, and an alert queue driven by `systemd`. |
