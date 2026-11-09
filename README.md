@@ -1,172 +1,123 @@
 # PowerBeam Security Lab
 
+**[English](README.md) | [Español](README.es.md)**
+
 [![Python Tests](https://github.com/PedroCZMO/powerbeam-security-lab/actions/workflows/python-tests.yml/badge.svg?branch=main)](https://github.com/PedroCZMO/powerbeam-security-lab/actions/workflows/python-tests.yml)
 
-**Laboratorio personal de Blue Team / SOC L1** · Ubiquiti PowerBeam PBE-M5-400 · Ubuntu · Python · Syslog · systemd
+**Hands-on Blue Team / SOC L1 lab** | Python · Linux · Syslog · Detection Engineering · Incident Triage · Automated Testing
 
-> **Estado verificado: 4 de noviembre de 2026.** Proyecto de aprendizaje construido sobre un dispositivo propio y una red local controlada. Incluye detección de eventos de autenticación, pruebas automatizadas, supervisión de infraestructura e investigación documentada de un simulacro. **No es un SOC de producción ni una auditoría de seguridad formal.**
+> A documented personal cybersecurity lab built around an **owned Ubiquiti PowerBeam device** and an isolated/controlled local test network. This is a learning and engineering project, **not a production SOC, a commercial SIEM, or evidence of a real-world compromise**.
 
-## El proyecto en 30 segundos
+## 30-second overview
 
-PowerBeam Security Lab recibe eventos de una antena Ubiquiti real, los conserva en Ubuntu y ejecuta detectores de comportamiento sospechoso. Dos versiones del monitor (V1 y V3) permiten comparar resultados; un tercer componente comprueba periódicamente la salud de la infraestructura.
+I built a small SOC-style monitoring pipeline that ingests **real authentication events** from a physical Ubiquiti PowerBeam, detects suspicious sequences in Python, writes deduplicated JSONL alerts, and supports investigation and acknowledgement. An Ubuntu host receives syslog; a Kali Linux VM produces **authorised** test traffic. Two monitoring implementations allow batch-versus-incremental validation.
 
-| Evidencia | Resultado comprobado |
+| Evidence a reviewer can inspect | Verified outcome |
 | --- | --- |
-| Recepción de registros | Syslog real de `192.168.1.20` a Ubuntu por **UDP/5514** |
-| Detecciones | **SOC-001** (múltiples fallos) y **SOC-002** (fallos seguidos de éxito) |
-| Simulacro SOC-002 | **2 fallos + 1 éxito**; V1 y V3 produjeron la misma alerta |
-| Pruebas automatizadas | **129 pruebas superadas** en Ubuntu el 04/11/2026 |
-| Automatización | Monitores V1/V3 cada **5 min** y Health Check cada **10 min** mediante `systemd` |
-| Supervisión | Estado de servicios y temporizadores, socket UDP, actividad reciente e ICMP |
-| Investigación SOC | [Caso SOC-002: informe de investigación](docs/26-investigacion-soc-002-2026-11-04.md) |
+| **Real SSH detection (SOC-001)** | **Five failed SSH logins** from Kali within **18.72 seconds** triggered one alert in both V1 and V3; alerts were byte-equivalent as JSON objects. [Investigation →](docs/42-pb-pt-002-soc-001-investigation.en.md) |
+| **Failed-then-successful login detection (SOC-002)** | Two failures followed by a success were correlated from real device logs in an authorised simulation. [Investigation →](docs/26-soc-002-investigation.en.md) |
+| **Automated verification** | **482 Python unit tests passed** locally and in [GitHub Actions, Python 3.12, 6 Nov 2026](https://github.com/PedroCZMO/powerbeam-security-lab/actions/runs/42268490185). |
+| **Operational automation** | V1 and V3 monitor runs (roughly every five minutes), infrastructure health checks, and an alert queue driven by `systemd`. |
+| **Case handling** | SOC-001 alert was reviewed and acknowledged; after the exercise, the primary queue reported **3 seen / 0 pending / 1 acknowledged**. |
 
-**Caso destacado para entrevistas SOC L1:** [investigación de una autenticación correcta tras varios fallos (simulacro autorizado)](docs/26-investigacion-soc-002-2026-11-04.md). Incluye registros originales, cronología, correlación de alertas, clasificación y limitaciones de la evidencia.
+**Start with the [SOC-001 Purple Team case study](docs/42-pb-pt-002-soc-001-investigation.en.md)** if you are assessing investigation skills, or read the [detectors](scripts/) and [tests](tests/) for implementation details.
 
-## Arquitectura
+## Architecture
 
 ```text
-                 RED LOCAL CONTROLADA
+                         AUTHORISED LOCAL TEST NETWORK
+  Kali Linux VM                                    Ubiquiti PowerBeam
+  Red Team / SSH client  ── failed logins ───────> Dropbear SSH server
+  192.168.1.30                                     192.168.1.20
+                                                        │
+                                               UDP/5514 syslog
+                                                        │
+                                                        ▼
+                                                  Ubuntu / rsyslog
+                                                  192.168.1.10
+                                                        │
+                                          /var/log/powerbeam/*.log*
+                                                        │
+                               ┌────────────────────────┴───────────────────┐
+                               ▼                                            ▼
+                       Monitor V1 (batch)                           Monitor V3 (incremental)
+                         SOC-001/002                                  SOC-001/002
+                               │                                            │
+                        alerts.jsonl                                 alerts-v3.jsonl
+                               │
+                         Local alert queue
+                         review / acknowledge
 
- Ubiquiti PowerBeam PBE-M5-400                Ubuntu / estación de análisis
- airOS 6.1.11 (XW)                            192.168.1.10
- 192.168.1.20                                     |
-       |                                          |
-       +------------- Syslog UDP/5514 ----------> rsyslog
-                                                  |
-                                    /var/log/powerbeam/powerbeam.log
-                                                  |
-                           +----------------------+---------------------+
-                           |                      |                     |
-                     logrotate              Monitor V1             Monitor V3
-                 14 rotaciones               Python                Python
-                     / compresión          SOC-001/002            SOC-001/002
-                           |                      |                     |
-                     Retención              alertas JSONL          alertas JSONL
-
-                  Health Check (systemd cada 10 minutos)
-                  ├─ rsyslog, temporizadores y ejecución V1/V3
-                  ├─ socket local UDP/5514
-                  ├─ último mensaje observado en los registros
-                  ├─ respuesta ICMP de la antena
-                  └─ informe JSON → journald
+               systemd timers · health checks · logrotate · reports
 ```
 
-Las direcciones son **privadas (RFC 1918)**. Esta topología representa la red del laboratorio; no demuestra exposición a Internet.
+Private IPs above describe the lab network, **not public Internet exposure**. V1 and V3 share detection logic while using different ingestion paths; matching outputs are **not** evidence of two independently designed detection engines.
 
-## Casos de uso de detección
+## Detection rules and tested cases
 
-| Regla | Condición configurada | Qué permite observar |
-| --- | --- | --- |
-| **SOC-001** | Al menos **5 autenticaciones fallidas en 5 minutos** | Posible patrón de fuerza bruta; no confirma un ataque |
-| **SOC-002** | Al menos **2 fallos seguidos de una autenticación correcta en 5 minutos** | Secuencia de acceso que merece revisión |
+| Rule | Condition | Real-world evidence | Interpretation |
+| --- | --- | --- | --- |
+| **SOC-001** | At least **five failed authentications from one client IP within five minutes** | Five incorrect passwords recorded by Dropbear on **6 Nov 2026**, from Kali `192.168.1.30`. Both monitors emitted `SOC-001-36f69895f7b28039`. | **True positive for the rule**, but the activity was an **authorised test**, not a confirmed malicious brute-force attack. |
+| **SOC-002** | At least **two failures followed by a successful authentication from the same IP within five minutes** | Controlled authentication sequence on **4 Nov 2026**; both monitors produced matching alert fields. | Activity requiring triage; an alert alone does not establish compromise. |
 
-Los detectores procesan eventos de autenticación de la antena. **V1** realiza el análisis por lotes; **V3** utiliza procesamiento incremental con un estado propio y continúa como implementación experimental. Los resultados de ambos se compararon en el simulacro SOC-002, sin compartir sus archivos de alertas.
+**SOC-001 investigation outcome:** five connection events, five `Bad password attempt` events, and five `Exit before auth` events; **no successful SSH authentication observed in the reviewed 18:34–18:40 CET window**. The alert was persisted, reviewed and acknowledged without deleting the detection record. [Full timeline and evidence →](docs/42-pb-pt-002-soc-001-investigation.en.md)
 
-### Ejemplo real: SOC-002, 04/11/2026
+**SOC-002 investigation outcome:** two incorrect passwords followed by a successful authentication in approximately **19.32 seconds**. The exercise was authorised and documented, not an unauthorised breach. [Case report →](docs/26-soc-002-investigation.en.md)
 
-```text
-11:00:06 CET  Bad password attempt for 'ubnt' from 192.168.1.10
-11:00:20 CET  Bad password attempt for 'ubnt' from 192.168.1.10
-11:00:25 CET  Password auth succeeded for 'ubnt' from 192.168.1.10
-```
+## Engineering work showcased
 
-La secuencia duró **19,318 segundos** y activó la alerta `SOC-002-2ad9ffcb5b5d0b58`, con severidad de regla `medium`. V1 y V3 registraron el mismo identificador y los mismos campos relevantes. **Fue una prueba autorizada, no una intrusión confirmada.** [Ver análisis y evidencias](docs/26-investigacion-soc-002-2026-11-04.md).
+| Area | Implementation / evidence |
+| --- | --- |
+| **Log ingestion and parsing** | `rsyslog` collection from a physical device; Python parsers distinguish the device's syslog sender IP from the actual SSH client IP and use the **Ubuntu receive timestamp** for correlation. |
+| **Detection and correlation** | `scripts/auth_detector.py`, `scripts/bruteforce_detector.py`, `scripts/security_monitor.py`: five-minute windows, source-IP correlation and non-duplicating alert IDs. |
+| **Incremental processing / resilience** | `stateful_monitor_v3.py`, compressed-log readers and regression tests for disappeared log history, write failures, concurrency and log rotation/inode reuse. V3 remains **experimental**. |
+| **Alert handling** | `scripts/alert_queue.py`: persistent local queue, restricted permissions, deduplication and explicit `reviewed` acknowledgement. Separate V3 output avoids double-counting in the primary queue. |
+| **Health and operations** | `systemd` units/timers, `logrotate`, UDP listener and service health checks, cautious treatment of missing telemetry, and resilience reports. |
+| **Reporting and trends** | Daily SOC metrics and reports, local private snapshots and trend comparisons. These aggregate V1 alert data; they do **not** claim complete network visibility. |
+| **Notifications** | Manual Gmail API/OAuth proof of concept and health checks. **Automatic external alert delivery is not enabled.** |
+| **Software quality** | `unittest` suite, offline fixtures including real Dropbear log syntax, and GitHub Actions CI on Ubuntu/Python 3.12. |
 
-## Supervisión y automatización
+## For reviewers: where to look first
 
-`powerbeam-health.service` se ejecuta como usuario restringido `powerbeam-monitor`; su temporizador se activó y ejecutó automáticamente por primera vez el **04/11/2026 a las 12:34:01 CET**. Los informes se registran en `journald`.
+1. **[Purple Team case: real SSH failures and SOC-001 investigation](docs/42-pb-pt-002-soc-001-investigation.en.md)** — evidence, timelines, attribution, alert equivalence, triage and acknowledgement.
+2. **[SOC-002 case: failed attempts followed by a successful login](docs/26-soc-002-investigation.en.md)** — correlation, classification and evidence limitations.
+3. **[Dropbear regression tests](tests/test_purple_team_dropbear.py)** — eight tests derived from the actual SSH message format.
+4. **[Core detector](scripts/security_monitor.py)** and **[incremental monitor](scripts/stateful_monitor_v3.py)** — implementation details.
+5. **[GitHub Actions: 482 tests passed](https://github.com/PedroCZMO/powerbeam-security-lab/actions/runs/42268490185)** — independently visible CI result.
 
-| Componente | Unidad systemd | Cadencia observada/configurada |
-| --- | --- | --- |
-| Detector V1 | `powerbeam-monitor.timer` | Aproximadamente cada 5 minutos |
-| Detector V3 | `powerbeam-monitor-v3.timer` | Aproximadamente cada 5 minutos |
-| Supervisor | `powerbeam-health.timer` | Aproximadamente cada 10 minutos |
+Additional implementation notes in [`docs/`](docs/) remain mainly in **Spanish**. The two investigation reports above are available in English and Spanish. The complete original overview is preserved in [README.es.md](README.es.md).
 
-El Health Check distingue entre **infraestructura local operativa**, **conectividad ICMP** y **actividad reciente en los logs**. Sin una señal periódica fiable emitida por el dispositivo, `ingestion_status` permanece en `UNKNOWN`: ni un puerto UDP abierto ni una respuesta ICMP prueban ingestión continua.
+## Run the offline tests
 
-Para conocer su configuración, despliegue y limitaciones: [Health Check con systemd](docs/25-despliegue-health-check-systemd.md).
-
-## Cómo revisar el laboratorio
-
-**Ejecutar las pruebas automatizadas** desde la raíz del repositorio:
+Clone the repository and, from its root, run:
 
 ```bash
 python3 -m unittest discover -s tests -q
 ```
 
-Resultado observado el **04/11/2026**: **129 pruebas, OK**. Es una validación ejecutada localmente; **no se presenta como una ejecución de CI**.
+The test suite uses Python's standard library and synthetic/offline fixtures. The result verified on **6 Nov 2026** was **482 tests, OK** both locally and in GitHub Actions. An expected `argparse` error from a negative test checking Gmail's `--confirm-live-send` safeguard may appear on stderr; the final `OK` and successful workflow conclusion are the relevant result.
 
-**Consultar los temporizadores** en la máquina donde está instalado el laboratorio:
-
-```bash
-systemctl list-timers --all --no-pager | grep powerbeam
-```
-
-**Consultar los informes del supervisor:**
+To run the batch monitor **without writing alerts**, pipe appropriately formatted local sample syslog lines into:
 
 ```bash
-sudo journalctl -u powerbeam-health.service -n 70 --no-pager
+python3 scripts/security_monitor.py
 ```
 
-**Ejecutar el Health Check directamente** en la instalación descrita:
+**Cloning does not reproduce the physical device, live rsyslog feed, systemd services, OAuth credentials or historical incidents.** Follow the lab's deployment documentation and use only hardware and networks you own or are authorised to test.
 
-```bash
-sudo -u powerbeam-monitor /usr/bin/python3 -B \
-  /opt/powerbeam-monitor-v3/scripts/health_check.py \
-  --inspect-log-activity --fresh-minutes 30 --check-antenna-icmp
-```
+## Security, scope and limitations
 
-Estos comandos de observación requieren una instalación previa y permisos adecuados. **No basta con clonar el repositorio para disponer del dispositivo ni de sus registros.** Consulta la documentación de despliegue antes de aplicar configuraciones.
+- The lab is **authorised and local**; it does not demonstrate an external attack or a compromised device.
+- Original backups, passwords, private keys, access tokens and full unsanitised log collections must **not** be committed. See [SECURITY.md](SECURITY.md) (Spanish).
+- Syslog over UDP lacks encryption and delivery guarantees; restrict it to a trusted segment.
+- The **device's internal log clock differed by one hour** from the timestamp received by Ubuntu. Correlation uses the receiver's timezone-aware timestamp; the device's clock configuration requires separate validation.
+- A healthy process, open UDP socket or ICMP response does **not** prove continuous log ingestion. Health reporting deliberately exposes `UNKNOWN` where it cannot establish freshness.
+- The implementation is a **learning project**, without production HA, complete threat coverage, a full SIEM, or automated incident containment.
 
-## Hallazgos iniciales y cronología
+## Project status
 
-| Fecha | Hito respaldado por el laboratorio |
-| --- | --- |
-| **29/10/2026** | Reconocimiento local: SSH (22/TCP), HTTP (80/TCP), HTTPS (443/TCP); Telnet (23/TCP) cerrado. Revisión de SSH y del certificado TLS. |
-| **29–30/10/2026** | Centralización de syslog, permisos restrictivos, persistencia y rotación de registros con `logrotate`. |
-| **01–04/11/2026** | Desarrollo y comprobación de detecciones SOC, ejecución paralela de V1/V3 y pruebas de robustez. |
-| **04/11/2026** | Simulacro SOC-002 con eventos reales, Health Check automatizado y **129 pruebas automatizadas** superadas. |
-| **04/11/2026** | Publicación del [informe de investigación SOC-002](docs/26-investigacion-soc-002-2026-11-04.md). |
+**Verified technical milestone: 6 November 2026** · **README refreshed: 9 November 2026**.
 
-**Riesgos de configuración observados durante el reconocimiento:** algoritmos SSH heredados y certificado HTTPS autofirmado caducado el **28/03/2024**. Son hallazgos de configuración, **no evidencia de explotación**. [Ver hallazgos y recomendaciones](docs/05-hallazgos-y-recomendaciones.md).
+Completed: physical-device syslog ingestion, SOC-001/SOC-002 correlation, dual-monitor evidence matching, automated CI tests, alert triage/acknowledgement, and basic operational monitoring. Next areas for improvement: richer detection coverage, verifiable ingestion health, and a **read-only local SOC dashboard**.
 
-## Documentación técnica
-
-| Documento | Contenido |
-| --- | --- |
-| [01 · Reconocimiento](docs/01-reconocimiento.md) | Puertos, servicios y observaciones técnicas |
-| [02 · Centralización de Syslog](docs/02-centralizacion-syslog.md) | Recepción, permisos y flujo de registros |
-| [03 · Sincronización horaria](docs/03-sincronizacion-horaria.md) | Chrony en Ubuntu y comprobaciones pendientes |
-| [04 · Rotación y retención](docs/04-rotacion-y-retencion.md) | Configuración y validaciones de `logrotate` |
-| [05 · Hallazgos y recomendaciones](docs/05-hallazgos-y-recomendaciones.md) | Riesgos detectados y mitigaciones propuestas |
-| [06 · Evidencias y validación](docs/06-evidencias-y-validacion.md) | Resultados iniciales y alcance de las pruebas |
-| [07 · Roadmap inicial](docs/07-roadmap.md) | Plan de trabajo original; consultar el estado actual en este README |
-| [21 · Observabilidad](docs/21-observabilidad-health-check-fase1.md) | Primera fase del Health Check |
-| [22 · HEALTH-004](docs/22-health004-receptor-udp.md) | Comprobación del receptor UDP |
-| [23 · HEALTH-005](docs/23-health005-ultima-recepcion-observada.md) | Última recepción observada en los registros |
-| [24 · HEALTH-006](docs/24-health006-conectividad-icmp.md) | Conectividad ICMP de la antena |
-| [25 · Despliegue systemd](docs/25-despliegue-health-check-systemd.md) | Servicio, temporizador y validación real |
-| [26 · Investigación SOC-002](docs/26-investigacion-soc-002-2026-11-04.md) | Caso práctico de análisis de alerta y evidencias |
-
-## Configuraciones y evidencias publicables
-
-- [`configs/30-powerbeam.conf.example`](configs/30-powerbeam.conf.example): ejemplo reconstruido de rsyslog; **no es un volcado literal** de la configuración real.
-- [`configs/logrotate-powerbeam.conf`](configs/logrotate-powerbeam.conf): regla de rotación basada en la configuración comprobada.
-- [`configs/chrony-snippet.conf.example`](configs/chrony-snippet.conf.example): fragmento orientativo; **no constituye evidencia de aplicación**.
-- [`evidencias/evento-sanitizado.txt`](evidencias/evento-sanitizado.txt): muestra anonimizada e ilustrativa basada en un evento observado.
-- [`scripts/health_check.py`](scripts/health_check.py): comprobaciones de salud y conectividad.
-- [`systemd/powerbeam-health.service`](systemd/powerbeam-health.service) y [`systemd/powerbeam-health.timer`](systemd/powerbeam-health.timer): automatización del Health Check.
-
-## Alcance, seguridad y trabajo pendiente
-
-Este proyecto se desarrolla **exclusivamente en equipos propios o autorizados**. No se publican contraseñas, respaldos de airOS, claves privadas, capturas completas de tráfico ni registros originales completos. El transporte Syslog UDP no proporciona cifrado ni garantía de entrega: debe permanecer dentro de una red aislada o protegida. Ver [`SECURITY.md`](SECURITY.md).
-
-Límites que seguimos documentando:
-
-- El reloj de recepción de Ubuntu estaba sincronizado mediante NTP; la marca incluida por la antena difería aproximadamente una hora. **La configuración y sincronización NTP del dispositivo requieren validación independiente**; no se interpreta automáticamente como avería.
-- `ingestion_status=UNKNOWN` mientras no exista una señal periódica fiable; la ausencia de registros puede ser inactividad normal.
-- V3 continúa como monitor incremental **experimental**, aunque se haya validado frente a V1 en el caso SOC-002.
-- Una alerta **SOC-001/SOC-002** es un indicador para investigar, no prueba por sí sola de un ataque, ni de compromiso del equipo.
-- El laboratorio todavía no incluye notificaciones externas del Health Check, un SIEM completo ni garantías propias de producción.
-
-**Estado:** laboratorio SOC personal **operativo y en desarrollo**. Última actualización documentada: **04/11/2026**.
+**Language:** [English](README.md) · [Español](README.es.md)
