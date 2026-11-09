@@ -16,7 +16,7 @@ I built a small SOC-style monitoring pipeline that ingests **real authentication
 | --- | --- |
 | **Real SSH detection (SOC-001)** | **Five failed SSH logins** from Kali within **18.72 seconds** triggered one alert in both V1 and V3; their parsed JSON alert records were identical. [Investigation →](docs/42-pb-pt-002-soc-001-investigation.en.md) |
 | **Failed-then-successful login detection (SOC-002)** | Two failures followed by a success were correlated from real device logs in an authorised simulation. [Investigation →](docs/26-soc-002-investigation.en.md) |
-| **Automated verification** | **482 Python unit tests passed** locally and in [GitHub Actions, Python 3.12, 6 Nov 2026](https://github.com/PedroCZMO/powerbeam-security-lab/actions/runs/42268490185). |
+| **Automated verification** | **502 Python unit tests passed** in [GitHub Actions (Python 3.12), 9 Nov 2026](https://github.com/PedroCZMO/powerbeam-security-lab/actions/runs/42609738643); the previous **482 tests passed locally** on 6 Nov. |
 | **Operational automation** | V1 and V3 monitor runs (roughly every five minutes), infrastructure health checks, and an alert queue driven by `systemd`. |
 | **Case handling** | SOC-001 alert was reviewed and acknowledged; after the exercise, the primary queue reported **3 seen / 0 pending / 1 acknowledged**. |
 
@@ -84,7 +84,7 @@ Private IPs above describe the lab network, **not public Internet exposure**. V1
 2. **[SOC-002 case: failed attempts followed by a successful login](docs/26-soc-002-investigation.en.md)** — correlation, classification and evidence limitations.
 3. **[Dropbear regression tests](tests/test_purple_team_dropbear.py)** — eight tests derived from the actual SSH message format.
 4. **[Core detector](scripts/security_monitor.py)** and **[incremental monitor](scripts/stateful_monitor_v3.py)** — implementation details.
-5. **[GitHub Actions: 482 tests passed](https://github.com/PedroCZMO/powerbeam-security-lab/actions/runs/42268490185)** — independently visible CI result.
+5. **[GitHub Actions: 502 tests passed](https://github.com/PedroCZMO/powerbeam-security-lab/actions/runs/42609738643)** — independently visible CI result.
 
 Additional implementation notes in [`docs/`](docs/) remain mainly in **Spanish**. The two investigation reports above are available in English and Spanish. The complete original overview is preserved in [README.es.md](README.es.md).
 
@@ -96,7 +96,7 @@ Clone the repository and, from its root, run:
 python3 -m unittest discover -s tests -q
 ```
 
-The test suite uses Python's standard library and synthetic/offline fixtures. The result verified on **6 Nov 2026** was **482 tests, OK** both locally and in GitHub Actions. An expected `argparse` error from a negative test checking Gmail's `--confirm-live-send` safeguard may appear on stderr; the final `OK` and successful workflow conclusion are the relevant result.
+The test suite uses Python's standard library and synthetic/offline fixtures. **502 tests, OK** were verified in GitHub Actions on **9 Nov 2026**; **482 tests, OK** were previously verified locally on 6 Nov. An expected `argparse` error from a negative test checking Gmail's `--confirm-live-send` safeguard may appear on stderr; the final `OK` and successful workflow conclusion are the relevant result.
 
 To run the batch monitor **without writing alerts**, pipe appropriately formatted local sample syslog lines into:
 
@@ -117,8 +117,8 @@ python3 scripts/security_monitor.py
 
 ## Project status
 
-**Verified technical milestone: 6 November 2026** · **README refreshed: 9 November 2026**.
+**Verified technical milestone: 9 November 2026** · **README refreshed: 9 November 2026**.
 
-Completed: physical-device syslog ingestion, SOC-001/SOC-002 correlation, dual-monitor evidence matching, automated CI tests, alert triage/acknowledgement, and basic operational monitoring. Next areas for improvement: richer detection coverage, verifiable ingestion health, and improvements to the **read-only local SOC dashboard**.
+Completed: physical-device syslog ingestion, SOC-001/SOC-002 correlation, dual-monitor evidence matching, automated CI tests, alert triage/acknowledgement, basic operational monitoring, and an offline read-only SOC dashboard. Next areas for improvement: richer detection coverage, verifiable ingestion health, and improvements to the **read-only local SOC dashboard**.
 
 **Language:** [English](README.md) · [Español](README.es.md)

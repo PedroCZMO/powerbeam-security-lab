@@ -6,7 +6,7 @@
 
 **Laboratorio personal de Blue Team / SOC L1** · Ubiquiti PowerBeam PBE-M5-400 · Ubuntu · Python · Syslog · systemd
 
-> **Estado verificado: 6 de noviembre de 2026.** Laboratorio personal de aprendizaje sobre equipo propio y red controlada. Los ejercicios SOC-001 y SOC-002 se documentan con evidencias reales; **482 pruebas superadas localmente y en GitHub Actions**. No es un SOC de producción ni una auditoría formal.
+> **Estado actualizado: 9 de noviembre de 2026.** Laboratorio personal de aprendizaje sobre equipo propio y red controlada. Los ejercicios SOC-001 y SOC-002 se documentan con evidencias reales; **482 pruebas locales superadas (06/11)** y **502 pruebas superadas en GitHub Actions (09/11)**. No es un SOC de producción ni una auditoría formal.
 
 ## El proyecto en 30 segundos
 
@@ -17,7 +17,7 @@ PowerBeam Security Lab recibe eventos de una antena Ubiquiti real, los conserva 
 | Recepción de registros | Syslog real de `192.168.1.20` a Ubuntu por **UDP/5514** |
 | Detecciones | **SOC-001** (múltiples fallos) y **SOC-002** (fallos seguidos de éxito) |
 | Simulacro SOC-002 | **2 fallos + 1 éxito**; V1 y V3 produjeron la misma alerta |
-| Pruebas automatizadas | **482 pruebas superadas** localmente y en [GitHub Actions](https://github.com/PedroCZMO/powerbeam-security-lab/actions/runs/42268490185) (06/11/2026) |
+| Pruebas automatizadas | **502 pruebas superadas** en [GitHub Actions](https://github.com/PedroCZMO/powerbeam-security-lab/actions/runs/42609738643) (09/11/2026); **482** superadas localmente (06/11/2026) |
 | Automatización | Monitores V1/V3 cada **5 min** y Health Check cada **10 min** mediante `systemd` |
 | Supervisión | Estado de servicios y temporizadores, socket UDP, actividad reciente e ICMP |
 | Investigación SOC | [SOC-001: cinco fallos SSH reales](docs/42-pb-pt-002-investigacion-soc-001-2026-11-06.md) · [SOC-002: fallos seguidos de éxito](docs/26-investigacion-soc-002-2026-11-04.md) |
@@ -96,7 +96,7 @@ Para conocer su configuración, despliegue y limitaciones: [Health Check con sys
 python3 -m unittest discover -s tests -q
 ```
 
-Resultado verificado el **06/11/2026**: **482 pruebas, OK**, tanto en Ubuntu como en [GitHub Actions (Python 3.12)](https://github.com/PedroCZMO/powerbeam-security-lab/actions/runs/42268490185). Los tests son offline; no requieren el dispositivo.
+Resultados verificados: **482 pruebas, OK** en Ubuntu (06/11/2026) y **502 pruebas, OK** en [GitHub Actions (Python 3.12)](https://github.com/PedroCZMO/powerbeam-security-lab/actions/runs/42609738643) (09/11/2026). Los tests son offline; no requieren el dispositivo.
 
 **Consultar los temporizadores** en la máquina donde está instalado el laboratorio:
 
@@ -130,6 +130,7 @@ Estos comandos de observación requieren una instalación previa y permisos adec
 | **04/11/2026** | Simulacro SOC-002 con eventos reales, Health Check automatizado y **129 pruebas automatizadas** superadas. |
 | **04/11/2026** | Publicación del [informe de investigación SOC-002](docs/26-investigacion-soc-002-2026-11-04.md). |
 | **06/11/2026** | [Ejercicio PB-PT-002](docs/42-pb-pt-002-investigacion-soc-001-2026-11-06.md): cinco fallos SSH reales desde Kali; una SOC-001 idéntica en V1/V3; cierre `reviewed` y **482 pruebas** superadas en CI. |
+| **09/11/2026** | [Dashboard SOC local](docs/43-dia14-soc-dashboard-local.md): vista HTML privada de métricas agregadas; **502 pruebas** superadas en CI. |
 
 **Riesgos de configuración observados durante el reconocimiento:** algoritmos SSH heredados y certificado HTTPS autofirmado caducado el **28/03/2024**. Son hallazgos de configuración, **no evidencia de explotación**. [Ver hallazgos y recomendaciones](docs/05-hallazgos-y-recomendaciones.md).
 
@@ -177,4 +178,4 @@ Límites que seguimos documentando:
 - Una alerta **SOC-001/SOC-002** es un indicador para investigar, no prueba por sí sola de un ataque, ni de compromiso del equipo.
 - El laboratorio todavía no incluye notificaciones externas del Health Check, un SIEM completo ni garantías propias de producción.
 
-**Estado:** laboratorio SOC personal **operativo y en desarrollo**. Última validación documentada: **06/11/2026**.
+**Estado:** laboratorio SOC personal **operativo y en desarrollo**. Última validación documentada: **09/11/2026**.
