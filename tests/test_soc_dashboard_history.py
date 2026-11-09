@@ -203,5 +203,54 @@ class HistoryTests(unittest.TestCase):
             mod.render_index([("2026-11-06", "index.html", summary)])
 
 
+    def test_21_health_states_have_distinct_semantic_tones(self):
+        expected = {
+            "HEALTHY": "healthy",
+            "READY_LOCAL": "ready-local",
+            "WARNING": "warning",
+            "CRITICAL": "critical",
+            "UNKNOWN": "unverified",
+            "NOT_CHECKED": "unverified",
+            "NOT_AUTOMATED": "unverified",
+        }
+        for value, tone in expected.items():
+            with self.subTest(value=value):
+                self.assertEqual(mod._status_tone(value), tone)
+
+    def test_22_unverified_states_never_get_healthy_color(self):
+        html = mod.render_index(self.reports())
+        self.assertIn('class="state healthy">HEALTHY</strong>', html)
+        self.assertIn('class="state ready-local">READY_LOCAL</strong>', html)
+        self.assertIn('class="state unverified">NOT_CHECKED</strong>', html)
+        self.assertIn('class="state unverified">NOT_AUTOMATED</strong>', html)
+        self.assertNotIn('class="state healthy">NOT_CHECKED', html)
+        self.assertNotIn('class="state healthy">NOT_AUTOMATED', html)
+
+    def test_23_warn_and_critical_use_distinct_styles(self):
+        summary = mod._extract_summary(mock_report("2026-11-06"))
+        summary["health"]["Motor de detección"] = "WARNING"
+        summary["health"]["Cola de alertas"] = "CRITICAL"
+        html = mod.render_index([("2026-11-06", "index.html", summary)])
+        self.assertIn('class="state warning">WARNING</strong>', html)
+        self.assertIn('class="state critical">CRITICAL</strong>', html)
+        self.assertIn('.state.warning{color:#f6c26b}', html)
+        self.assertIn('.state.critical{color:#ff8192}', html)
+
+    def test_24_unknown_future_status_is_neutral(self):
+        summary = mod._extract_summary(mock_report("2026-11-06"))
+        summary["health"]["OAuth remoto"] = "FUTURE_CODE"
+        html = mod.render_index([("2026-11-06", "index.html", summary)])
+        self.assertIn('class="state unverified">FUTURE_CODE</strong>', html)
+
+    def test_25_state_color_is_not_sole_indicator(self):
+        html = mod.render_index(self.reports())
+        # Status text remains visible; CSS only adds a supporting visual cue.
+        self.assertIn("NOT_CHECKED</strong>", html)
+        self.assertIn("NOT_AUTOMATED</strong>", html)
+        self.assertIn("READY_LOCAL</strong>", html)
+        self.assertNotIn("<script", html.lower())
+        self.assertNotIn("https://", html)
+
+
 if __name__ == "__main__":
     unittest.main()
