@@ -73,6 +73,7 @@ Private IPs above describe the lab network, **not public Internet exposure**. V1
 | **Incremental processing / resilience** | `stateful_monitor_v3.py`, compressed-log readers and regression tests for disappeared log history, write failures, concurrency and log rotation/inode reuse. V3 remains **experimental**. |
 | **Alert handling** | `scripts/alert_queue.py`: persistent local queue, restricted permissions, deduplication and explicit `reviewed` acknowledgement. Separate V3 output avoids double-counting in the primary queue. |
 | **Health and operations** | `systemd` units/timers, `logrotate`, UDP listener and service health checks, cautious treatment of missing telemetry, and resilience reports. |
+| **Local SOC dashboard** | [`scripts/soc_dashboard.py`](scripts/soc_dashboard.py) turns validated aggregate reports into a private, offline, read-only HTML dashboard. [Setup and safety notes →](docs/43-dia14-soc-dashboard-local.md). |
 | **Reporting and trends** | Daily SOC metrics and reports, local private snapshots and trend comparisons. These aggregate V1 alert data; they do **not** claim complete network visibility. |
 | **Notifications** | Manual Gmail API/OAuth proof of concept and health checks. **Automatic external alert delivery is not enabled.** |
 | **Software quality** | `unittest` suite, offline fixtures including real Dropbear log syntax, and GitHub Actions CI on Ubuntu/Python 3.12. |
@@ -118,6 +119,6 @@ python3 scripts/security_monitor.py
 
 **Verified technical milestone: 6 November 2026** · **README refreshed: 9 November 2026**.
 
-Completed: physical-device syslog ingestion, SOC-001/SOC-002 correlation, dual-monitor evidence matching, automated CI tests, alert triage/acknowledgement, and basic operational monitoring. Next areas for improvement: richer detection coverage, verifiable ingestion health, and a **read-only local SOC dashboard**.
+Completed: physical-device syslog ingestion, SOC-001/SOC-002 correlation, dual-monitor evidence matching, automated CI tests, alert triage/acknowledgement, and basic operational monitoring. Next areas for improvement: richer detection coverage, verifiable ingestion health, and improvements to the **read-only local SOC dashboard**.
 
 **Language:** [English](README.md) · [Español](README.es.md)

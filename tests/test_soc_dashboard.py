@@ -1,6 +1,5 @@
 """Offline tests for the privacy-preserving local SOC dashboard."""
 from datetime import datetime, timezone
-import copy
 import io
 import json
 import os
