@@ -152,6 +152,7 @@ Estos comandos de observación requieren una instalación previa y permisos adec
 | [26 · Investigación SOC-002](docs/26-investigacion-soc-002-2026-11-04.md) | Caso práctico de análisis de alerta y evidencias |
 | [41 · Kali y telemetría SSH](docs/41-dia13-topologia-kali-ubiquiti-telemetria-ssh.md) | Topología de pruebas y negociación SSH documentada |
 | [42 · Investigación SOC-001](docs/42-pb-pt-002-investigacion-soc-001-2026-11-06.md) | Cinco fallos reales desde Kali; correlación y reconocimiento |
+| [43 · Dashboard SOC local](docs/43-dia14-soc-dashboard-local.md) | Vista HTML de solo lectura desde métricas agregadas, sin red ni credenciales |
 | [26 EN · SOC-002](docs/26-soc-002-investigation.en.md) | Investigación SOC-002 en inglés |
 | [42 EN · SOC-001](docs/42-pb-pt-002-soc-001-investigation.en.md) | Investigación Purple Team en inglés |
 
