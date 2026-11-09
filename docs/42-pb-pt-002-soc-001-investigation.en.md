@@ -70,7 +70,7 @@ SOC-002 alerts: 2
 New alerts appended to alerts.jsonl: 1
 ```
 
-These lines translate the **observed Spanish-language monitor output**; the batch totals include historical events and the **two older SOC-002 alerts**, not only this exercise. The previous V1 run, at **18:40:01**, found the same SOC-001 but appended **zero** new JSONL alerts, demonstrating deduplication in this run.
+These lines translate the **observed Spanish-language monitor output**; the batch totals include historical events and the **two older SOC-002 alerts**, not only this exercise. A subsequent V1 run, at **18:40:01**, found the same SOC-001 but appended **zero** new JSONL alerts, demonstrating deduplication in this run.
 
 Time from fifth failure to the detection run: approximately **15.44 seconds**. This reflects the timer schedule, **not a benchmark of detection computation speed**.
 
