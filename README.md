@@ -16,7 +16,7 @@ I built a small SOC-style monitoring pipeline that ingests **real authentication
 | --- | --- |
 | **Real SSH detection (SOC-001)** | **Five failed SSH logins** from Kali within **18.72 seconds** triggered one alert in both V1 and V3; their parsed JSON alert records were identical. [Investigation →](docs/42-pb-pt-002-soc-001-investigation.en.md) |
 | **Failed-then-successful login detection (SOC-002)** | Two failures followed by a success were correlated from real device logs in an authorised simulation. [Investigation →](docs/26-soc-002-investigation.en.md) |
-| **Automated verification** | **522 Python unit tests passed** in [GitHub Actions (Python 3.12), 9 Nov 2026](https://github.com/PedroCZMO/powerbeam-security-lab/actions/runs/42614924297); the previous **482 tests passed locally** on 6 Nov. |
+| **Automated verification** | **527 Python unit tests passed** in [GitHub Actions (Python 3.12), 9 Nov 2026](https://github.com/PedroCZMO/powerbeam-security-lab/actions/runs/42616190256); the previous **482 tests passed locally** on 6 Nov. |
 | **Operational automation** | V1 and V3 monitor runs (roughly every five minutes), infrastructure health checks, and an alert queue driven by `systemd`. |
 | **Case handling** | SOC-001 alert was reviewed and acknowledged; after the exercise, the primary queue reported **3 seen / 0 pending / 1 acknowledged**. |
 
@@ -73,7 +73,7 @@ Private IPs above describe the lab network, **not public Internet exposure**. V1
 | **Incremental processing / resilience** | `stateful_monitor_v3.py`, compressed-log readers and regression tests for disappeared log history, write failures, concurrency and log rotation/inode reuse. V3 remains **experimental**. |
 | **Alert handling** | `scripts/alert_queue.py`: persistent local queue, restricted permissions, deduplication and explicit `reviewed` acknowledgement. Separate V3 output avoids double-counting in the primary queue. |
 | **Health and operations** | `systemd` units/timers, `logrotate`, UDP listener and service health checks, cautious treatment of missing telemetry, and resilience reports. |
-| **Local SOC dashboard** | [`scripts/soc_dashboard.py`](scripts/soc_dashboard.py) renders private, offline read-only reports; [`scripts/soc_dashboard_history.py`](scripts/soc_dashboard_history.py) creates a self-contained, portal-safe date selector (no sibling-file links). [Dashboard setup →](docs/43-dia14-soc-dashboard-local.md) · [History navigation →](docs/44-dia15-navegacion-historica-dashboard.md). |
+| **Local SOC dashboard** | [`scripts/soc_dashboard.py`](scripts/soc_dashboard.py) renders private, offline read-only reports; [`scripts/soc_dashboard_history.py`](scripts/soc_dashboard_history.py) creates a self-contained, portal-safe date selector with semantic health colors (no sibling-file links). [Dashboard setup →](docs/43-dia14-soc-dashboard-local.md) · [History navigation →](docs/44-dia15-navegacion-historica-dashboard.md). |
 | **Reporting and trends** | Daily SOC metrics and reports, local private snapshots and trend comparisons. These aggregate V1 alert data; they do **not** claim complete network visibility. |
 | **Notifications** | Manual Gmail API/OAuth proof of concept and health checks. **Automatic external alert delivery is not enabled.** |
 | **Software quality** | `unittest` suite, offline fixtures including real Dropbear log syntax, and GitHub Actions CI on Ubuntu/Python 3.12. |
@@ -84,7 +84,7 @@ Private IPs above describe the lab network, **not public Internet exposure**. V1
 2. **[SOC-002 case: failed attempts followed by a successful login](docs/26-soc-002-investigation.en.md)** — correlation, classification and evidence limitations.
 3. **[Dropbear regression tests](tests/test_purple_team_dropbear.py)** — eight tests derived from the actual SSH message format.
 4. **[Core detector](scripts/security_monitor.py)** and **[incremental monitor](scripts/stateful_monitor_v3.py)** — implementation details.
-5. **[GitHub Actions: 522 tests passed](https://github.com/PedroCZMO/powerbeam-security-lab/actions/runs/42614924297)** — independently visible CI result.
+5. **[GitHub Actions: 527 tests passed](https://github.com/PedroCZMO/powerbeam-security-lab/actions/runs/42616190256)** — independently visible CI result.
 
 Additional implementation notes in [`docs/`](docs/) remain mainly in **Spanish**. The two investigation reports above are available in English and Spanish. The complete original overview is preserved in [README.es.md](README.es.md).
 
@@ -96,7 +96,7 @@ Clone the repository and, from its root, run:
 python3 -m unittest discover -s tests -q
 ```
 
-The test suite uses Python's standard library and synthetic/offline fixtures. **522 tests, OK** were verified in GitHub Actions on **9 Nov 2026**; **482 tests, OK** were previously verified locally on 6 Nov. An expected `argparse` error from a negative test checking Gmail's `--confirm-live-send` safeguard may appear on stderr; the final `OK` and successful workflow conclusion are the relevant result.
+The test suite uses Python's standard library and synthetic/offline fixtures. **527 tests, OK** were verified in GitHub Actions on **9 Nov 2026**; **482 tests, OK** were previously verified locally on 6 Nov. An expected `argparse` error from a negative test checking Gmail's `--confirm-live-send` safeguard may appear on stderr; the final `OK` and successful workflow conclusion are the relevant result.
 
 To run the batch monitor **without writing alerts**, pipe appropriately formatted local sample syslog lines into:
 
