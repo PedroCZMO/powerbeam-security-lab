@@ -159,6 +159,20 @@ def _metric(label, count, *, caption=""):
             '</div>')
 
 
+def _status_tone(value):
+    """Present observed health without treating unknown/unverified as healthy."""
+    if value == "HEALTHY":
+        return "healthy"
+    if value == "READY_LOCAL":
+        return "ready-local"
+    if value in ("WARNING", "DEGRADED"):
+        return "warning"
+    if value in ("CRITICAL", "FAILED", "ERROR", "UNHEALTHY"):
+        return "critical"
+    # UNKNOWN / NOT_CHECKED / NOT_AUTOMATED and any future code are neutral.
+    return "unverified"
+
+
 def _card(day, summary):
     """Render only allowlisted metrics, never embed a source HTML document."""
     if not isinstance(summary, dict) or set(summary) != {
@@ -194,7 +208,8 @@ def _card(day, summary):
         for k in BAR_LABELS[3:]
     )
     by_health = "".join(
-        '<div class="row"><span>' + escape(k) + '</span><strong class="state">' +
+        '<div class="row"><span>' + escape(k) + '</span><strong class="state ' +
+        _status_tone(summary["health"][k]) + '">' +
         escape(summary["health"][k]) + '</strong></div>'
         for k in HEALTH_LABELS
     )
@@ -265,7 +280,13 @@ h1{{font-size:clamp(28px,4vw,44px);margin:8px 0 12px}}p{{line-height:1.65;color:
 .metric small{{font-size:12px;color:var(--muted)}}
 .breakdown{{display:grid;grid-template-columns:1fr 1fr;gap:20px}}
 h3{{font-size:16px;margin:25px 0 10px}}.row{{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:7px 0;border-bottom:1px solid var(--border)}}
-.row span{{color:var(--muted)}}.state{{color:var(--accent);font-size:12px;overflow-wrap:anywhere}}
+.row span{{color:var(--muted)}}
+.state{{color:var(--muted);font-size:12px;overflow-wrap:anywhere}}
+.state.healthy{{color:#57dfba}}
+.state.ready-local{{color:#79abff}}
+.state.warning{{color:#f6c26b}}
+.state.critical{{color:#ff8192}}
+.state.unverified{{color:var(--muted)}}
 .callout{{border-left:3px solid var(--accent);margin-top:32px;padding:15px 22px;background:#111c2b;border-radius:0 10px 10px 0}}
 small{{color:var(--muted)}}@media(max-width:750px){{.metrics,.breakdown{{grid-template-columns:1fr}}}}
 </style>

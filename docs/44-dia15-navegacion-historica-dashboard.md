@@ -76,7 +76,26 @@ python3 -m unittest discover -s tests -p 'test_soc_dashboard_history.py' -v
 python3 -m unittest discover -s tests -q
 ```
 
-La batería del módulo cuenta con **20 pruebas**, incluidas validaciones
+La batería del módulo cuenta con **25 pruebas**, incluidas validaciones
 de extracción de métricas, no filtración de contenido inesperado,
 consistencia de contadores y comportamiento autocontenido. Confirmar el
 total del proyecto mediante GitHub Actions después de integrar la corrección.
+
+## Colores semánticos del estado (revisión visual)
+
+Para evitar interpretar como saludable un estado que no ha sido verificado,
+el histórico representa **el texto del estado junto con el color**:
+
+| Estado | Color | Interpretación |
+| --- | --- | --- |
+| `HEALTHY` | Verde | Comprobación local satisfactoria |
+| `READY_LOCAL` | Azul | Preparado localmente; no certifica OAuth remoto |
+| `WARNING` / `DEGRADED` | Amarillo | Atención o degradación |
+| `CRITICAL` / `FAILED` / `ERROR` / `UNHEALTHY` | Rojo | Problema informado |
+| `UNKNOWN` / `NOT_CHECKED` / `NOT_AUTOMATED` | Gris | No verificado o no automatizado |
+
+Los estados desconocidos futuros se muestran en **gris**, nunca
+automáticamente en verde. Los colores no sustituyen las etiquetas de texto.
+
+Regenera `historico.html` después de actualizar el repositorio para
+aplicar los nuevos estilos; los informes diarios originales no cambian.
