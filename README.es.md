@@ -6,7 +6,7 @@
 
 **Laboratorio personal de Blue Team / SOC L1** · Ubiquiti PowerBeam PBE-M5-400 · Ubuntu · Python · Syslog · systemd
 
-> **Estado actualizado: 9 de noviembre de 2026.** Laboratorio personal de aprendizaje sobre equipo propio y red controlada. Los ejercicios SOC-001 y SOC-002 se documentan con evidencias reales; **482 pruebas locales superadas (06/11)** y **517 pruebas superadas en GitHub Actions (09/11)**. No es un SOC de producción ni una auditoría formal.
+> **Estado actualizado: 9 de noviembre de 2026.** Laboratorio personal de aprendizaje sobre equipo propio y red controlada. Los ejercicios SOC-001 y SOC-002 se documentan con evidencias reales; **482 pruebas locales superadas (06/11)** y **522 pruebas superadas en GitHub Actions (09/11)**. No es un SOC de producción ni una auditoría formal.
 
 ## El proyecto en 30 segundos
 
@@ -17,7 +17,7 @@ PowerBeam Security Lab recibe eventos de una antena Ubiquiti real, los conserva 
 | Recepción de registros | Syslog real de `192.168.1.20` a Ubuntu por **UDP/5514** |
 | Detecciones | **SOC-001** (múltiples fallos) y **SOC-002** (fallos seguidos de éxito) |
 | Simulacro SOC-002 | **2 fallos + 1 éxito**; V1 y V3 produjeron la misma alerta |
-| Pruebas automatizadas | **517 pruebas superadas** en [GitHub Actions](https://github.com/PedroCZMO/powerbeam-security-lab/actions/runs/42612866594) (09/11/2026); **482** superadas localmente (06/11/2026) |
+| Pruebas automatizadas | **522 pruebas superadas** en [GitHub Actions](https://github.com/PedroCZMO/powerbeam-security-lab/actions/runs/42614924297) (09/11/2026); **482** superadas localmente (06/11/2026) |
 | Automatización | Monitores V1/V3 cada **5 min** y Health Check cada **10 min** mediante `systemd` |
 | Supervisión | Estado de servicios y temporizadores, socket UDP, actividad reciente e ICMP |
 | Investigación SOC | [SOC-001: cinco fallos SSH reales](docs/42-pb-pt-002-investigacion-soc-001-2026-11-06.md) · [SOC-002: fallos seguidos de éxito](docs/26-investigacion-soc-002-2026-11-04.md) |
@@ -96,7 +96,7 @@ Para conocer su configuración, despliegue y limitaciones: [Health Check con sys
 python3 -m unittest discover -s tests -q
 ```
 
-Resultados verificados: **482 pruebas, OK** en Ubuntu (06/11/2026) y **517 pruebas, OK** en [GitHub Actions (Python 3.12)](https://github.com/PedroCZMO/powerbeam-security-lab/actions/runs/42612866594) (09/11/2026). Los tests son offline; no requieren el dispositivo.
+Resultados verificados: **482 pruebas, OK** en Ubuntu (06/11/2026) y **522 pruebas, OK** en [GitHub Actions (Python 3.12)](https://github.com/PedroCZMO/powerbeam-security-lab/actions/runs/42614924297) (09/11/2026). Los tests son offline; no requieren el dispositivo.
 
 **Consultar los temporizadores** en la máquina donde está instalado el laboratorio:
 
@@ -130,7 +130,7 @@ Estos comandos de observación requieren una instalación previa y permisos adec
 | **04/11/2026** | Simulacro SOC-002 con eventos reales, Health Check automatizado y **129 pruebas automatizadas** superadas. |
 | **04/11/2026** | Publicación del [informe de investigación SOC-002](docs/26-investigacion-soc-002-2026-11-04.md). |
 | **06/11/2026** | [Ejercicio PB-PT-002](docs/42-pb-pt-002-investigacion-soc-001-2026-11-06.md): cinco fallos SSH reales desde Kali; una SOC-001 idéntica en V1/V3; cierre `reviewed` y **482 pruebas** superadas en CI. |
-| **09/11/2026** | [Dashboard SOC local](docs/43-dia14-soc-dashboard-local.md): vista HTML privada de métricas agregadas; **517 pruebas** superadas en CI. |
+| **09/11/2026** | [Dashboard SOC local](docs/43-dia14-soc-dashboard-local.md): vista HTML privada de métricas agregadas; **522 pruebas** superadas en CI. |
 
 **Riesgos de configuración observados durante el reconocimiento:** algoritmos SSH heredados y certificado HTTPS autofirmado caducado el **28/03/2024**. Son hallazgos de configuración, **no evidencia de explotación**. [Ver hallazgos y recomendaciones](docs/05-hallazgos-y-recomendaciones.md).
 
@@ -154,7 +154,7 @@ Estos comandos de observación requieren una instalación previa y permisos adec
 | [41 · Kali y telemetría SSH](docs/41-dia13-topologia-kali-ubiquiti-telemetria-ssh.md) | Topología de pruebas y negociación SSH documentada |
 | [42 · Investigación SOC-001](docs/42-pb-pt-002-investigacion-soc-001-2026-11-06.md) | Cinco fallos reales desde Kali; correlación y reconocimiento |
 | [43 · Dashboard SOC local](docs/43-dia14-soc-dashboard-local.md) | Vista HTML de solo lectura desde métricas agregadas, sin red ni credenciales |
-| [44 · Navegación histórica SOC](docs/44-dia15-navegacion-historica-dashboard.md) | Índice privado de informes HTML por fecha, sin servidor ni JavaScript |
+| [44 · Navegación histórica SOC](docs/44-dia15-navegacion-historica-dashboard.md) | Histórico HTML autocontenido y desplegable por fecha, sin servidor ni JavaScript |
 | [26 EN · SOC-002](docs/26-soc-002-investigation.en.md) | Investigación SOC-002 en inglés |
 | [42 EN · SOC-001](docs/42-pb-pt-002-soc-001-investigation.en.md) | Investigación Purple Team en inglés |
 
