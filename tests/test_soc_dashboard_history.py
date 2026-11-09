@@ -1,4 +1,4 @@
-"""Unit tests for the offline SOC HTML history index."""
+"""Regression tests for portal-safe, self-contained SOC history viewer."""
 from datetime import datetime, timezone
 import io
 import os
@@ -14,11 +14,35 @@ import soc_dashboard_history as mod
 
 
 def mock_report(day):
-    return ('<!doctype html><meta http-equiv="Content-Security-Policy" '
-            'content="default-src \'none\'">'
-            '<title>PowerBeam Security Lab — SOC Dashboard</title>'
-            '<div class="meta">Informe de eventos: <strong>' + day +
-            '</strong><br></div>')
+    rule = "SOC-002" if day == "2026-11-04" else "SOC-001"
+    return soc_dashboard.render_dashboard({
+        "component": "powerbeam_soc_daily",
+        "report_status": "READY",
+        "inspection": "LOCAL_READ_ONLY",
+        "report_date": day,
+        "timezone": "Europe/Madrid",
+        "activity": {
+            "alerts_event_date": 1,
+            "alerts_by_rule": {"SOC-001": int(rule == "SOC-001"),
+                               "SOC-002": int(rule == "SOC-002"), "other": 0},
+            "alerts_by_severity": {"informational": 0, "low": 0, "medium": 1,
+                                   "high": 0, "critical": 0},
+            "acknowledged_on_date": 0 if day == "2026-11-04" else 1,
+        },
+        "pending_now": {
+            "total": 0,
+            "by_severity": {key: 0 for key in soc_dashboard.SEVERITIES},
+            "oldest_event_age_minutes": None,
+            "status": "HEALTHY",
+        },
+        "health": {
+            "detection": "HEALTHY", "alert_queue": "HEALTHY",
+            "backlog": "HEALTHY", "oauth_local": "READY_LOCAL",
+            "oauth_remote": "NOT_CHECKED",
+            "notification_delivery": "NOT_AUTOMATED",
+        },
+        "emails_sent": 0, "tokens_modified": False, "notes": [],
+    }, generated_at=datetime(2026, 11, 9, tzinfo=timezone.utc))
 
 
 def put_private(path, text):
@@ -32,22 +56,26 @@ class HistoryTests(unittest.TestCase):
         self.base = Path(self.tmp.name)
         os.chmod(self.base, 0o700)
 
-    def test_01_discover_two_real_cases(self):
+    def reports(self):
         put_private(self.base / "index.html", mock_report("2026-11-06"))
         put_private(self.base / "2026-11-04.html", mock_report("2026-11-04"))
-        self.assertEqual(mod.discover_reports(self.base),
+        return mod.discover_reports(self.base)
+
+    def test_01_discover_two_real_cases(self):
+        reports = self.reports()
+        self.assertEqual([(a, b) for a, b, _ in reports],
                          [("2026-11-06", "index.html"),
                           ("2026-11-04", "2026-11-04.html")])
 
-    def test_02_index_contains_both_links_and_no_network(self):
-        html = mod.render_index([("2026-11-06", "index.html"),
-                                 ("2026-11-04", "2026-11-04.html")],
-                                generated_at=datetime(2026, 11, 9, tzinfo=timezone.utc))
-        self.assertIn('href="index.html"', html)
-        self.assertIn('href="2026-11-04.html"', html)
-        self.assertIn("default-src 'none'", html)
-        self.assertNotIn("https://", html)
-        self.assertNotIn("<script", html.lower())
+    def test_02_self_contained_index_renders_two_dates(self):
+        index = mod.render_index(self.reports(),
+                                 generated_at=datetime(2026, 11, 9, tzinfo=timezone.utc))
+        self.assertIn("2026-11-06", index)
+        self.assertIn("2026-11-04", index)
+        self.assertEqual(index.count('<details class="card">'), 2)
+        self.assertIn("Ver métricas agregadas", index)
+        self.assertNotIn('href="index.html"', index)
+        self.assertNotIn('href="2026-11-04.html"', index)
 
     def test_03_empty_reports_rejected(self):
         with self.assertRaises(mod.DashboardError):
@@ -82,30 +110,35 @@ class HistoryTests(unittest.TestCase):
             mod.discover_reports(self.base)
 
     def test_09_reject_unsafe_dates(self):
-        for date_value in ("2026-02-30", "2026-11-04\" onclick=\"a", "not-a-date"):
-            with self.subTest(value=date_value):
+        for value in ("2026-02-30", '2026-11-04" onclick="x', "not-a-date"):
+            with self.subTest(value=value):
                 with self.assertRaises(mod.DashboardError):
-                    mod.render_index([(date_value, "index.html")])
+                    mod.render_index([(value, "index.html",
+                                       mod._extract_summary(mock_report("2026-11-06")))])
 
     def test_10_reject_bad_filename(self):
+        summary = mod._extract_summary(mock_report("2026-11-06"))
         with self.assertRaises(mod.DashboardError):
-            mod.render_index([("2026-11-06", "../evil.html")])
+            mod.render_index([("2026-11-06", "../evil.html", summary)])
 
-    def test_11_duplicate_same_day_deduplicated(self):
+    def test_11_duplicate_same_day_prefers_dated_filename(self):
         put_private(self.base / "index.html", mock_report("2026-11-06"))
         put_private(self.base / "2026-11-06.html", mock_report("2026-11-06"))
-        self.assertEqual(mod.discover_reports(self.base),
+        self.assertEqual([(d, f) for d, f, _ in mod.discover_reports(self.base)],
                          [("2026-11-06", "2026-11-06.html")])
 
     def test_12_end_to_end_cli_private_index(self):
-        put_private(self.base / "index.html", mock_report("2026-11-06"))
-        put_private(self.base / "2026-11-04.html", mock_report("2026-11-04"))
+        self.reports()
         with patch.object(sys, "stdout", new_callable=io.StringIO) as output:
             self.assertEqual(mod.main(["--dir", str(self.base)]), 0)
         dest = self.base / "historico.html"
+        html = dest.read_text(encoding="utf-8")
         self.assertIn('"reports": 2', output.getvalue())
         self.assertEqual(dest.stat().st_mode & 0o777, 0o600)
-        self.assertIn('href="2026-11-04.html"', dest.read_text(encoding="utf-8"))
+        self.assertIn('SOC-001', html)
+        self.assertIn('SOC-002', html)
+        self.assertIn('<details class="card">', html)
+        self.assertNotIn('href="index.html"', html)
 
     def test_13_invalid_report_never_overwrites_index(self):
         put_private(self.base / "index.html", "invalid")
@@ -118,7 +151,7 @@ class HistoryTests(unittest.TestCase):
         put_private(self.base / "index.html", mock_report("2026-11-06"))
         put_private(self.base / "other.html", "untrusted")
         (self.base / "LEEME-PRIMERO.txt").write_text("private")
-        self.assertEqual(mod.discover_reports(self.base),
+        self.assertEqual([(d, f) for d, f, _ in mod.discover_reports(self.base)],
                          [("2026-11-06", "index.html")])
 
     def test_15_reject_large_report(self):
@@ -126,6 +159,48 @@ class HistoryTests(unittest.TestCase):
                     "x" * (mod.MAX_REPORT_BYTES + 1))
         with self.assertRaises(mod.DashboardError):
             mod.discover_reports(self.base)
+
+    def test_16_summaries_from_real_html_are_correct(self):
+        rows = {d: summary for d, _, summary in self.reports()}
+        self.assertEqual(rows["2026-11-06"]["rules"]["SOC-001"], 1)
+        self.assertEqual(rows["2026-11-06"]["ack"], 1)
+        self.assertEqual(rows["2026-11-04"]["rules"]["SOC-002"], 1)
+        self.assertEqual(rows["2026-11-04"]["ack"], 0)
+        self.assertEqual(rows["2026-11-04"]["pending"], 0)
+        self.assertEqual(rows["2026-11-06"]["health"]["Motor de detección"],
+                         "HEALTHY")
+
+    def test_17_discard_unknown_and_secret_html(self):
+        original = mock_report("2026-11-06")
+        forged = original.replace("</body>",
+                                  "<p>SECRET_TOKEN_DO_NOT_SHOW 192.0.2.99</p></body>")
+        put_private(self.base / "index.html", forged)
+        rendered = mod.render_index(mod.discover_reports(self.base))
+        self.assertNotIn("SECRET_TOKEN_DO_NOT_SHOW", rendered)
+        self.assertNotIn("192.0.2.99", rendered)
+
+    def test_18_reject_inconsistent_daily_metrics(self):
+        corrupted = mock_report("2026-11-06").replace(
+            '<span class="bar-value">1</span>',
+            '<span class="bar-value">2</span>', 1)
+        put_private(self.base / "index.html", corrupted)
+        with self.assertRaises(mod.DashboardError):
+            mod.discover_reports(self.base)
+
+    def test_19_no_network_and_no_sibling_file_dependency(self):
+        html = mod.render_index(self.reports())
+        self.assertIn("default-src 'none'", html)
+        self.assertNotIn("https://", html)
+        self.assertNotIn("<script", html.lower())
+        self.assertNotIn("<iframe", html.lower())
+        self.assertNotIn("href=", html.lower())
+        self.assertIn("<summary>", html)
+
+    def test_20_bad_direct_summary_is_rejected(self):
+        summary = mod._extract_summary(mock_report("2026-11-06"))
+        summary["health"]["Motor de detección"] = '<script>malicious()</script>'
+        with self.assertRaises(mod.DashboardError):
+            mod.render_index([("2026-11-06", "index.html", summary)])
 
 
 if __name__ == "__main__":
